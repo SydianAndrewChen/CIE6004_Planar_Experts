@@ -126,7 +126,8 @@ def main(cfg: DictConfig):
             print('saving [{}] images ...'.format(split))
             dataset = datasets[split]
             depths_all = []
-            for i in range(len(dataset)):
+            from tqdm import tqdm
+            for i in tqdm(range(len(dataset))):
                 data = dataset[i]
                 stats, images = forward_pass(data, model, device, cfg)
                 

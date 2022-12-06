@@ -166,7 +166,10 @@ def main(cfg: DictConfig):
         # validation
         if (epoch+1) % cfg.train.epoch.validation == 0:
             model.eval()
-            for i, data in enumerate(valid_loader):
+            print("validation")
+            from tqdm import tqdm
+            print(f"writing to {img_folder}")
+            for i, data in tqdm(enumerate(valid_loader)):
                 data = data[0]
                 valid_stats, valid_images = forward_pass(
                     data, 

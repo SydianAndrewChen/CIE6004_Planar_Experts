@@ -55,7 +55,19 @@ class ModelExperts(nn.Module):
         self.bake_res = bake_res
         self.filter_thresh = filter_thresh 
         self.white_bg = white_bg
-
+        import tinycudann as tcnn
+        self.encoder = tcnn.Encoding(
+            n_input_dims=3,
+            encoding_config={
+                "otype": "HashGrid",
+                "n_levels": 8,
+                "n_features_per_level": 2,
+                "log2_hashmap_size": 19,
+                "base_resolution": 8,
+                "per_level_scale": 1.5
+            },
+        )
+        
     def compute_geometry_loss(self, points):
         return self.plane_geo(points)
 
@@ -136,6 +148,7 @@ class ModelExperts(nn.Module):
         return planes_idx_full
     
     def get_planes_features(self, planes_points, planes_idx):
+        return None
         return self.plane_geo.get_planes_features(planes_points, planes_idx)
 
     def predict_points_rgba_experts(self, camera, points, planes_idx):
@@ -147,8 +160,12 @@ class ModelExperts(nn.Module):
         Return
             poins_rgba: (hit_n, 4)
         '''
-        view_dirs = get_normalized_direction(camera, points[:, :3]) #(b, 3)
-        points_rgba = self.plane_radiance_field(points, view_dirs, planes_idx)
+        view_dirs = get_normalized_direction(camera, points) #(b, 3)
+        h = self.encoder(points)
+        # print(f"points.shape = \n{points.shape}\n")
+        # print(f"h.shape = \n{h.shape}\n")
+        # exit()
+        points_rgba = self.plane_radiance_field(h, view_dirs, planes_idx)
         return points_rgba
 
     def alpha_composite(self, rgb, alpha, depth):
@@ -215,7 +232,7 @@ class ModelExperts(nn.Module):
         planes_idx_full = self.get_planes_indices(hit)
         planes_idx = planes_idx_full[hit]
         points = world_points[hit]
-        features = self.get_planes_features(planes_points[hit], planes_idx)
+        # features = self.get_planes_features(planes_points[hit], planes_idx)
         # print(f"features[:, None].shape = \n{features[:, None].shape}\n")
         # print(f"points.shape = \n{points.shape}\n")
         """
@@ -224,10 +241,13 @@ class ModelExperts(nn.Module):
             For each feature map we need to prepare for 
 
         """
-        points_embedded = torch.concatenate((points, features[:, None]), dim=1)
+        # points_embedded = torch.concatenate((points, features[:, None]), dim=1)
+        # features = torch.concatenate([features[:, None], torch.sin(features[:, None]), torch.cos(features[:, None])], dim=1)
+
+        
         # print(f"points_embedded.shape = \n{points_embedded.shape}\n")
         # exit()
-        points_rgba = self.predict_points_rgba_experts(camera, points_embedded, planes_idx)
+        points_rgba = self.predict_points_rgba_experts(camera, points, planes_idx)
         rgba = world_points.new_zeros(*world_points.shape[:2], 4)
         rgba[hit] = points_rgba
         depth, sort_idx = self.sort_depth_index(planes_depth)

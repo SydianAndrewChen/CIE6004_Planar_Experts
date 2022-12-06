@@ -56,7 +56,7 @@ class NerfExperts(torch.nn.Module):
         # processing with a deep neural network.
         self.harmonic_embedding_xyz = HarmonicEmbedding(n_harmonic_functions_xyz)
         self.harmonic_embedding_dir = HarmonicEmbedding(n_harmonic_functions_dir)
-        embedding_dim_xyz = n_harmonic_functions_xyz * 2 * 4 + 4
+        embedding_dim_xyz = n_harmonic_functions_xyz * 2 * 16 + 16
         # print(f"n_harmonic_functions_xyz = \n{n_harmonic_functions_xyz}\n")
         # exit()
         embedding_dim_dir = n_harmonic_functions_dir * 2 * 3 + 3

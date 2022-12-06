@@ -22,9 +22,22 @@ class PlaneGeometry(nn.Module):
         # self.yz.data = eyes[:,:,:2]
 
         self.init_with_box = False # check if the initialization including boxes
-        self.feature_resolution = 32
-        self.planes_features = nn.Parameter(torch.randn(n_plane, self.feature_resolution, self.feature_resolution))
+        self.feature_resolution = 64
+        # self.planes_features = nn.Parameter(torch.randn(n_plane, self.feature_resolution, self.feature_resolution))
         # self.planes_features[:] = 0
+        # import tinycudann as tcnn
+        # self.encoder_lists = nn.ModuleList([tcnn.Encoding(
+        #     n_input_dims=2,
+        #     encoding_config={
+        #         "otype": "HashGrid",
+        #         "n_levels": 4,
+        #         "n_features_per_level": 2,
+        #         "log2_hashmap_size": 19,
+        #         "base_resolution": 4,
+        #         "per_level_scale": 1.5
+        #     },
+        # ) for _ in range(n_plane)])
+        # print(f"self.encoder_lists = \n{self.encoder_lists}\n")
 
 
     def initialize(self, 
