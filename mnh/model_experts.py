@@ -134,6 +134,9 @@ class ModelExperts(nn.Module):
         planes_idx_full = torch.arange(plane_n, device=hit.device)
         planes_idx_full = planes_idx_full.unsqueeze(1).repeat(1, point_n)
         return planes_idx_full
+    
+    def get_planes_features(self, planes_points, planes_idx):
+        return self.plane_geo.get_planes_features(planes_points, planes_idx)
 
     def predict_points_rgba_experts(self, camera, points, planes_idx):
         '''
@@ -144,7 +147,7 @@ class ModelExperts(nn.Module):
         Return
             poins_rgba: (hit_n, 4)
         '''
-        view_dirs = get_normalized_direction(camera, points) #(b, 3)
+        view_dirs = get_normalized_direction(camera, points[:, :3]) #(b, 3)
         points_rgba = self.plane_radiance_field(points, view_dirs, planes_idx)
         return points_rgba
 
@@ -205,22 +208,35 @@ class ModelExperts(nn.Module):
             ndc_points: (point_n, 3)
             camera: pytorch3d camera
         '''
-        world_points, _, planes_depth, hit = self.ray_plane_intersect(camera, ndc_points)
+        world_points, planes_points, planes_depth, hit = self.ray_plane_intersect(camera, ndc_points)
         if hit.any() == False:
             return self.no_hit_output(ndc_points)
         
         planes_idx_full = self.get_planes_indices(hit)
         planes_idx = planes_idx_full[hit]
         points = world_points[hit]
-        points_rgba = self.predict_points_rgba_experts(camera, points, planes_idx)
+        features = self.get_planes_features(planes_points[hit], planes_idx)
+        # print(f"features[:, None].shape = \n{features[:, None].shape}\n")
+        # print(f"points.shape = \n{points.shape}\n")
+        """
+        TODO:
+            Add a feature grid here for each plane? 
+            For each feature map we need to prepare for 
+
+        """
+        points_embedded = torch.concatenate((points, features[:, None]), dim=1)
+        # print(f"points_embedded.shape = \n{points_embedded.shape}\n")
+        # exit()
+        points_rgba = self.predict_points_rgba_experts(camera, points_embedded, planes_idx)
         rgba = world_points.new_zeros(*world_points.shape[:2], 4)
         rgba[hit] = points_rgba
-
         depth, sort_idx = self.sort_depth_index(planes_depth)
         rgba = rgba[sort_idx]
         rgb, alpha = rgba[:,:,:-1], rgba[:,:,-1]
         color, depth = self.alpha_composite(rgb, alpha, depth)
-        
+        # print(f"planes_points.shape = \n{planes_points.shape}\n")
+        # print(f"hit.shape = \n{hit.shape}\n")
+        # exit()
         # compute unprojected points with predicted depth
         # points = unproject_points(camera, ndc_points, depth)
         # points = points.squeeze(0).detach()       

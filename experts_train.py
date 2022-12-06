@@ -109,23 +109,36 @@ def main(cfg: DictConfig):
     img_folder = os.path.join(CURRENT_DIR, 'output_images', cfg.name, 'experts', 'output')
     os.makedirs(img_folder, exist_ok=True)
     print('[Traing Experts]')
-
-    epoch_total = cfg.train.epoch.distill + cfg.train.epoch.finetune
+    if pretrained_teacher:
+        epoch_total = cfg.train.epoch.distill + cfg.train.epoch.finetune
+    else:
+        epoch_total = cfg.train.epoch.finetune
+    train_stats_arr = []
     for epoch in range(start_epoch, epoch_total):
         model.train()
         stats_logger.new_epoch()
 
         for i, data in enumerate(train_loader):
             data = data[0]
-            if epoch < cfg.train.epoch.distill:
-                train_stats = learn_from_teacher(
-                    data, 
-                    model, 
-                    teacher,
-                    device, 
-                    cfg, 
-                    optimizer
-                )
+            if pretrained_teacher:
+                if epoch < cfg.train.epoch.distill:
+                    train_stats = learn_from_teacher(
+                        data, 
+                        model, 
+                        teacher,
+                        device, 
+                        cfg, 
+                        optimizer
+                    )
+                else:
+                    train_stats, _ = forward_pass(
+                        data, 
+                        model,
+                        device,
+                        cfg, 
+                        optimizer,
+                        training=True,
+                    )
             else:
                 train_stats, _ = forward_pass(
                     data, 
@@ -136,7 +149,7 @@ def main(cfg: DictConfig):
                     training=True,
                 )
             stats_logger.update('train', train_stats)
-        
+        train_stats_arr.append(train_stats)
         stats_logger.print_info('train')
         lr_scheduler.step()
 
@@ -172,6 +185,7 @@ def main(cfg: DictConfig):
                     img.save(path)
 
             stats_logger.print_info('valid')
-
+    with open("train_stats_arr", 'w+') as f:
+        f.write(str(train_stats_arr))
 if __name__ == '__main__':
     main()

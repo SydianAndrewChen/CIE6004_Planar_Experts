@@ -15,7 +15,8 @@ data:
   batch_points: 10000
   white_bg: False
 checkpoint:
-  teacher: 'replica-kitchen-teacher.pth'
+  # teacher: 'replica-kitchen-teacher.pth'
+  teacher: ''
   experts: 'replica-kitchen-experts.pth'
 
 model:
@@ -57,13 +58,13 @@ optimizer:
   lr_scheduler_gamma: 0.1
 
 train:
-  resume: True
+  resume: False
   freeze_geometry: True
   epoch:
     teacher: 2000
     distill: 1000
     finetune: 1000
-    validation: 500
+    validation: 200
     checkpoint: 20
 test:
   mode: 'test_model'

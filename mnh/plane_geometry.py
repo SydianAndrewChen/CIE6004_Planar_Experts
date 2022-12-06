@@ -22,6 +22,10 @@ class PlaneGeometry(nn.Module):
         # self.yz.data = eyes[:,:,:2]
 
         self.init_with_box = False # check if the initialization including boxes
+        self.feature_resolution = 32
+        self.planes_features = nn.Parameter(torch.randn(n_plane, self.feature_resolution, self.feature_resolution))
+        # self.planes_features[:] = 0
+
 
     def initialize(self, 
         points, 
@@ -157,6 +161,62 @@ class PlaneGeometry(nn.Module):
         planes_points = planes_points.view(-1, 3)
         planes_idx = planes_idx.view(-1)
         return planes_points, planes_idx
+
+    def get_planes_features(self, planes_points, planes_idx):
+        planes_features = self.planes_features[planes_idx]
+        # print(f"planes_features.shape = \n{planes_features.shape}\n")
+        wh = self.wh[planes_idx]
+        feature_coor = ((planes_points / wh + .5) * (self.feature_resolution-1))
+        # print(f"feature_coor = \n{feature_coor}\n")
+        # print(f"feature_coor.shape = \n{feature_coor.shape}\n")
+        # print(f"(feature_coor < 0).any() = \n{(feature_coor < 0).any()}\n")
+        # print(f"(feature_coor > 31).any() = \n{(feature_coor > 31).any()}\n")
+        feature_coor_x = feature_coor[:, 0]
+        feature_coor_y = feature_coor[:, 1]
+        feature_coor_x_floor = torch.floor(feature_coor_x).type(torch.long)
+        feature_coor_x_ceil = torch.ceil(feature_coor_x).type(torch.long)
+        feature_coor_y_floor = torch.floor(feature_coor_y).type(torch.long)
+        feature_coor_y_ceil = torch.ceil(feature_coor_y).type(torch.long)
+        # print(f"feature_coor_x = \n{feature_coor_x}\n")
+        # print(f"feature_coor_x_floor = \n{feature_coor_x_floor}\n")
+        # print(f"feature_coor_x_ceil = \n{feature_coor_x_ceil}\n")
+        # print(f"feature_coor_y = \n{feature_coor_y}\n")
+        # print(f"feature_coor_y_floor = \n{feature_coor_y_floor}\n")
+        feature_coor_x_floor_weight = feature_coor_x - feature_coor_x_floor
+        feature_coor_x_ceil_weight = 1 - feature_coor_x_floor_weight
+        feature_coor_y_floor_weight = feature_coor_y - feature_coor_y_floor
+        feature_coor_y_ceil_weight = 1 - feature_coor_y_floor_weight
+        # print(f"feature_coor_x_floor_weight = \n{feature_coor_x_floor_weight}\n")
+        # print(f"feature_coor_x_ceil_weight = \n{feature_coor_x_ceil_weight}\n")
+        # print(f"feature_coor_y_ceil.shape = \n{feature_coor_y_ceil.shape}\n")
+        planes_features_x_ceil_y_ceil = planes_features[(torch.arange(len(feature_coor)), feature_coor_x_ceil, feature_coor_y_ceil)]
+        planes_features_x_ceil_y_floor = planes_features[(torch.arange(len(feature_coor)), feature_coor_x_ceil, feature_coor_y_floor)]
+        planes_features_x_floor_y_ceil = planes_features[(torch.arange(len(feature_coor)), feature_coor_x_floor, feature_coor_y_ceil)]
+        planes_features_x_floor_y_floor = planes_features[(torch.arange(len(feature_coor)), feature_coor_x_floor, feature_coor_y_floor)]
+
+        # print(f"planes_features_x_ceil_y_ceil = \n{planes_features_x_ceil_y_ceil}\n")
+        # print(f"planes_features_x_ceil_y_floor = \n{planes_features_x_ceil_y_floor}\n")
+        # print(f"planes_features_x_floor_y_ceil = \n{planes_features_x_floor_y_ceil}\n")
+        # print(f"planes_features_x_floor_y_floor = \n{planes_features_x_floor_y_floor}\n")
+        features = feature_coor_x_floor_weight * \
+            (feature_coor_y_ceil_weight * planes_features_x_floor_y_ceil + 
+            feature_coor_y_floor_weight * planes_features_x_floor_y_floor) \
+            +       feature_coor_x_ceil_weight * \
+            (feature_coor_y_ceil_weight * planes_features_x_ceil_y_ceil + 
+            feature_coor_y_floor_weight * planes_features_x_ceil_y_floor)
+        # print(f"features = \n{features}\n")
+        # import numpy as np
+        # np.savetxt("features.npy", features.detach().cpu().numpy())
+        # np.savetxt("planes_features_x_floor_y_ceil.npy", planes_features_x_floor_y_ceil.detach().cpu().numpy())
+        # np.savetxt("planes_features_x_floor_y_floor.npy", planes_features_x_floor_y_floor.detach().cpu().numpy())
+        # np.savetxt("planes_features_x_ceil_y_ceil.npy", planes_features_x_ceil_y_ceil.detach().cpu().numpy())
+        # np.savetxt("planes_features_x_ceil_y_floor.npy", planes_features_x_ceil_y_floor.detach().cpu().numpy())
+        # print(f"torch.sum(features) = \n{torch.sum(features)}\n")
+        # print(f"torch.max(torch.abs(features)) = \n{torch.max(torch.abs(features))}\n")
+        # print(f"features.shape = \n{features.shape}\n")
+        # exit()
+        return features
+
 
     def planes_vertices(self):
         '''
