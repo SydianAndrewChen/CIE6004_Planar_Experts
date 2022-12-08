@@ -25,15 +25,28 @@ class PlaneGeometry(nn.Module):
         self.feature_resolution = 64
         # self.planes_features = nn.Parameter(torch.randn(n_plane, self.feature_resolution, self.feature_resolution))
         # self.planes_features[:] = 0
-        # import tinycudann as tcnn
-        # self.encoder_lists = nn.ModuleList([tcnn.Encoding(
-        #     n_input_dims=2,
+        import tinycudann as tcnn
+        # self.planes_points_encoder = tcnn.Encoding(
+        #     n_input_dims=3,
         #     encoding_config={
         #         "otype": "HashGrid",
         #         "n_levels": 4,
         #         "n_features_per_level": 2,
         #         "log2_hashmap_size": 19,
         #         "base_resolution": 4,
+        #         "per_level_scale": 1.5
+        #     },
+        # )
+        # self.encoder_levels = 2
+        # self.encoder_base_resolution = self.encoder_levels
+        # self.encoder_lists = nn.ModuleList([tcnn.Encoding(
+        #     n_input_dims=2,
+        #     encoding_config={
+        #         "otype": "HashGrid",
+        #         "n_levels": self.encoder_levels,
+        #         "n_features_per_level": 2,
+        #         "log2_hashmap_size": 19,
+        #         "base_resolution": self.encoder_base_resolution,
         #         "per_level_scale": 1.5
         #     },
         # ) for _ in range(n_plane)])
@@ -174,6 +187,23 @@ class PlaneGeometry(nn.Module):
         planes_points = planes_points.view(-1, 3)
         planes_idx = planes_idx.view(-1)
         return planes_points, planes_idx
+
+    def get_planes_points_encoded(self, planes_points, planes_idx):
+        wh = self.wh[planes_idx]
+        planes_points_normalized = (planes_points / wh + .5).type(torch.float32)
+        return planes_points_normalized
+        # planes_idx_normalized = planes_idx / self.n_plane
+        # planes_input = torch.concatenate([planes_idx[:, None], planes_points_normalized], dim=1)
+        # res = self.planes_points_encoder(planes_input)
+        # return res
+        res = torch.zeros((planes_points_normalized.shape[0], self.encoder_levels * 2)).cuda()
+        # for i in range(len(planes_idx)):
+        #     idx = planes_idx[i]
+        #     res[i] = self.encoder_lists[idx](planes_points_normalized[i].unsqueeze(0))
+        for idx in range(self.n_plane):
+            indices = (planes_idx == idx)
+            res[indices] = (self.encoder_lists[idx](planes_points_normalized[indices])).type(torch.float32)
+        return res
 
     def get_planes_features(self, planes_points, planes_idx):
         planes_features = self.planes_features[planes_idx]

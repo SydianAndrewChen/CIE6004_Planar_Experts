@@ -117,8 +117,9 @@ def main(cfg: DictConfig):
     for epoch in range(start_epoch, epoch_total):
         model.train()
         stats_logger.new_epoch()
-
-        for i, data in enumerate(train_loader):
+        # print(len(train_loader))
+        from tqdm import tqdm
+        for i, data in tqdm(enumerate(train_loader), total=len(train_loader)):
             data = data[0]
             if pretrained_teacher:
                 if epoch < cfg.train.epoch.distill:
@@ -167,7 +168,6 @@ def main(cfg: DictConfig):
         if (epoch+1) % cfg.train.epoch.validation == 0:
             model.eval()
             print("validation")
-            from tqdm import tqdm
             print(f"writing to {img_folder}")
             for i, data in tqdm(enumerate(valid_loader)):
                 data = data[0]

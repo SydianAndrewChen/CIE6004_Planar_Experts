@@ -10,7 +10,8 @@ seed: 0
 cuda: '0'
 data:
   path: 'data/replica/kitchen/'
-  image_size: [512, 512]
+  image_size: [128, 128]
+  # image_size: [512, 512]
   sample_rate: 1.0
   batch_points: 10000
   white_bg: False
@@ -22,7 +23,8 @@ checkpoint:
 model:
   n_plane: 500
   n_train_sample: 4096
-  n_infer_sample: 4096
+  # n_infer_sample: 4096
+  n_infer_sample: -1
   anti_aliasing: True
   premultiply_alpha: False
   init:
@@ -64,7 +66,7 @@ train:
     teacher: 2000
     distill: 1000
     finetune: 1000
-    validation: 200
+    validation: 20
     checkpoint: 20
 test:
   mode: 'test_model'

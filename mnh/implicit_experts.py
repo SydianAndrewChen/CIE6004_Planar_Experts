@@ -56,7 +56,7 @@ class NerfExperts(torch.nn.Module):
         # processing with a deep neural network.
         self.harmonic_embedding_xyz = HarmonicEmbedding(n_harmonic_functions_xyz)
         self.harmonic_embedding_dir = HarmonicEmbedding(n_harmonic_functions_dir)
-        embedding_dim_xyz = n_harmonic_functions_xyz * 2 * 16 + 16
+        embedding_dim_xyz = n_harmonic_functions_xyz * 2 * 5 + 5
         # print(f"n_harmonic_functions_xyz = \n{n_harmonic_functions_xyz}\n")
         # exit()
         embedding_dim_dir = n_harmonic_functions_dir * 2 * 3 + 3
@@ -115,6 +115,9 @@ class NerfExperts(torch.nn.Module):
             [intermediate_feat, rays_embedding], dim=-1
         )
         color = F.relu(self.color_layer[0](color_layer_input, index))
+        return color
+        print(f"color.shape = \n{color.shape}\n")
+        exit()
         color = self.color_layer[1](color, index)
         return color
 

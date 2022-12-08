@@ -7,6 +7,7 @@ from .utils_model import *
 from .plane_geometry import PlaneGeometry
 from .implicit_experts import NerfExperts
 from .utils import *
+from model_unet import UNet, Decoder
 
 class ModelExperts(nn.Module):
     def __init__(
@@ -33,6 +34,8 @@ class ModelExperts(nn.Module):
         super().__init__()
         self.n_plane = n_plane
         self.plane_geo = PlaneGeometry(n_plane)
+        # image_size = (128, 128)
+        # n_infer_sample = -1
         self.image_size = image_size
         self.ndc_grid = get_ndc_grid(image_size)
 
@@ -67,6 +70,8 @@ class ModelExperts(nn.Module):
                 "per_level_scale": 1.5
             },
         )
+        # self.unet = UNet()
+        self.decoder = Decoder(chs=[32, 32, 3])
         
     def compute_geometry_loss(self, points):
         return self.plane_geo(points)
@@ -151,7 +156,7 @@ class ModelExperts(nn.Module):
         return None
         return self.plane_geo.get_planes_features(planes_points, planes_idx)
 
-    def predict_points_rgba_experts(self, camera, points, planes_idx):
+    def predict_points_rgba_experts(self, camera, points, planes_points_encoded, planes_idx):
         '''
         Args
             camera
@@ -161,12 +166,23 @@ class ModelExperts(nn.Module):
             poins_rgba: (hit_n, 4)
         '''
         view_dirs = get_normalized_direction(camera, points) #(b, 3)
-        h = self.encoder(points)
-        # print(f"points.shape = \n{points.shape}\n")
-        # print(f"h.shape = \n{h.shape}\n")
-        # exit()
-        points_rgba = self.plane_radiance_field(h, view_dirs, planes_idx)
+        input_ = torch.concatenate([points, planes_points_encoded], dim=1)
+        points_rgba = self.plane_radiance_field(input_, view_dirs, planes_idx)
         return points_rgba
+
+    def predict_points_rgbfeature_a_experts(self, camera, points, planes_points_encoded, planes_idx):
+        '''
+        Args
+            camera
+            points: (hit_n, 3): in world coord.
+            planes_idx: (hit_n) 
+        Return
+            poins_rgba: (hit_n, 4)
+        '''
+        view_dirs = get_normalized_direction(camera, points) #(b, 3)
+        input_ = torch.concatenate([points, planes_points_encoded], dim=1)
+        points_rgbfeature_a = self.plane_radiance_field(input_, view_dirs, planes_idx)
+        return points_rgbfeature_a
 
     def alpha_composite(self, rgb, alpha, depth):
         '''
@@ -232,9 +248,11 @@ class ModelExperts(nn.Module):
         planes_idx_full = self.get_planes_indices(hit)
         planes_idx = planes_idx_full[hit]
         points = world_points[hit]
-        # features = self.get_planes_features(planes_points[hit], planes_idx)
-        # print(f"features[:, None].shape = \n{features[:, None].shape}\n")
+        planes_points_encoded = self.plane_geo.get_planes_points_encoded(planes_points[hit], planes_idx)
+        # print(f"planes_points_encoded.shape = \n{planes_points_encoded.shape}\n")
+        # # print(f"features[:, None].shape = \n{features[:, None].shape}\n")
         # print(f"points.shape = \n{points.shape}\n")
+        # exit()
         """
         TODO:
             Add a feature grid here for each plane? 
@@ -247,20 +265,17 @@ class ModelExperts(nn.Module):
         
         # print(f"points_embedded.shape = \n{points_embedded.shape}\n")
         # exit()
-        points_rgba = self.predict_points_rgba_experts(camera, points, planes_idx)
-        rgba = world_points.new_zeros(*world_points.shape[:2], 4)
+        # points_rgba = self.predict_points_rgba_experts(camera, points, planes_points_encoded, planes_idx)
+        points_rgba = self.predict_points_rgbfeature_a_experts(camera, points, planes_points_encoded, planes_idx)
+        # rgba = world_points.new_zeros(*world_points.shape[:2], 4)
+        rgba = world_points.new_zeros(*world_points.shape[:2], points_rgba.shape[-1])
         rgba[hit] = points_rgba
         depth, sort_idx = self.sort_depth_index(planes_depth)
         rgba = rgba[sort_idx]
+        # print(f"rgba.shape = \n{rgba.shape}\n")
         rgb, alpha = rgba[:,:,:-1], rgba[:,:,-1]
+        # print(f"rgb.shape = \n{rgb.shape}\n")
         color, depth = self.alpha_composite(rgb, alpha, depth)
-        # print(f"planes_points.shape = \n{planes_points.shape}\n")
-        # print(f"hit.shape = \n{hit.shape}\n")
-        # exit()
-        # compute unprojected points with predicted depth
-        # points = unproject_points(camera, ndc_points, depth)
-        # points = points.squeeze(0).detach()       
-        # eval_num = torch.sum(hit, dim=0).float() #(point_n)
 
         output = {
             'color': color, #(point_3, 3)
@@ -364,7 +379,8 @@ class ModelExperts(nn.Module):
         # aggregate output from all chunks
         img_wh = self.image_size
         shapes = {
-            'color': [*img_wh, 3],
+            # 'color': [*img_wh, 3],
+            'color': [*img_wh, 32],
             'depth': [*img_wh],
             # 'points': [-1, 3],
             # 'eval_num': [-1]
@@ -375,13 +391,21 @@ class ModelExperts(nn.Module):
             ], dim=0).view(*shape)
             for key, shape in shapes.items()
         }
+        # print(f"output['color'].shape = \n{output['color'].shape}\n")
+        output['color'] = self.decoder(output['color'].transpose(0, -1).unsqueeze(0)).squeeze().transpose(-1, 0)
+        # print(f"output['color'].shape = \n{output['color'].shape}\n")
+        # exit()
         return output 
 
     def forward(self, camera):
         ndc_points_full = self.ndc_points_full(camera)
 
         if self.training: 
-            output = self.forward_train(camera, ndc_points_full)
+            # output = self.forward_train(camera, ndc_points_full)
+            output = self.forward_full_image(camera, ndc_points_full)
+            # output['color'] = self.unet(output['color'].transpose(0, -1).unsqueeze(0)).squeeze().transpose(-1, 0)
+            # print(f"output_['color'].shape = \n{output_['color'].shape}\n")
+            # exit()
         else: 
             output = self.forward_full_image(camera, ndc_points_full)
         return output

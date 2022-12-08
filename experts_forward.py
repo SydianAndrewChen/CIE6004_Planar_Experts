@@ -29,6 +29,13 @@ def get_model_from_config(cfg:DictConfig):
     )
     return model 
 
+def downsample(img : torch.Tensor, down_sample_size : List[int]):
+    import torchvision.transforms.functional as TF
+    return TF.resize(img.transpose(0, -1), down_sample_size[:-1]).transpose(0, -1)
+    # import cv2
+    # cv2.imwrite("test.png", TF.resize((img * 255).transpose(0, -1), down_sample_size[:-1]).transpose(0, -1).cpu().numpy())
+
+
 def forward_pass(
     data, 
     model,
@@ -43,11 +50,14 @@ def forward_pass(
     points_dense = data['points'].to(device)
 
     timer = Timer(cuda_sync= not training)
+    import gc
     if training:
         model.train()
+        gc.collect()
+        torch.cuda.empty_cache()
         out = model(camera)
-        sample_idx = out['sample_idx']
-        color_gt = color_gt.view(-1, 3)[sample_idx]
+        # sample_idx = out['sample_idx']
+        # color_gt = color_gt.view(-1, 3)[sample_idx]
     else:
         with torch.no_grad():
             model.eval()
@@ -57,7 +67,8 @@ def forward_pass(
     color_pred = out['color']
     # points_pred = out['points']
     # points = torch.cat([points_dense, points_pred])
-
+    # exit()
+    # color_gt = downsample(color_gt, color_pred.shape)
     mse_color = F.mse_loss(color_pred, color_gt)
     loss_geo = model.compute_geometry_loss(points_dense)
     loss_point2plane = loss_geo['loss_point2plane']
