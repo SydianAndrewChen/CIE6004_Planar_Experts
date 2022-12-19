@@ -21,7 +21,7 @@ checkpoint:
   experts: 'replica-kitchen-experts.pth'
 
 model:
-  n_plane: 500
+  n_plane: 100 # number of expers
   n_train_sample: 4096
   # n_infer_sample: 4096
   n_infer_sample: -1
